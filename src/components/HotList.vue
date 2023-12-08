@@ -1,60 +1,70 @@
 <template>
-  <n-card hoverable class="hot-list" :header-style="{ padding: '16px' }" :content-style="{ padding: '0 16px' }"
-    :footer-style="{ padding: '16px' }" @click="toList">
+  <n-card
+    hoverable
+    class="hot-list"
+    :header-style="{ padding: '16px' }"
+    :content-style="{ padding: '0 16px' }"
+    :footer-style="{ padding: '16px' }"
+    @click="toList"
+  >
     <template #header>
-      <Transition name="fade" mode="out-in">
-        <template v-if="errorFlag">
-          <div class="loading">
-
-          </div>
-        </template>
-
-        <template v-else-if="!hotListData">
-          <div class="loading">
-            <n-skeleton text round />
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="title">
-            <n-avatar class="ico" :src="`/logo/${hotType}.png`" fallback-src="/ico/icon_error.png" />
-            <n-text class="name">{{ hotListData.title }}</n-text>
-            <n-text class="subtitle" :depth="2">
-              {{ hotListData.subtitle }}
-            </n-text>
-          </div>
-        </template>
-      </Transition>
+      <n-space class="title" justify="space-between">
+        <div class="name">
+          <n-avatar
+            class="ico"
+            :src="`/logo/${hotData.name}.png`"
+            fallback-src="/ico/icon_error.png"
+          />
+          <n-text class="name-text">{{ hotData.label }}</n-text>
+        </div>
+        <n-text v-if="hotListData?.subtitle" class="subtitle" :depth="2">
+          {{ hotListData.subtitle }}
+        </n-text>
+        <n-skeleton v-else width="60px" text round />
+      </n-space>
     </template>
     <n-scrollbar class="news-list" ref="scrollbarRef">
       <Transition name="fade" mode="out-in">
-        <template v-if="errorFlag">
-          <div>
-            <n-result status="404" title="热点资源不存在" description="生活总归带点荒谬">
-              <template #footer>
-                <n-button>找点乐子吧</n-button>
-              </template>
-            </n-result>
-          </div>
+        <template v-if="loadingError">
+          <n-result
+            size="small"
+            status="500"
+            title="哎呀，加载失败了"
+            description="生活总会遇到不如意的事情"
+            style="margin-top: 40px"
+          />
         </template>
-
         <template v-else-if="!hotListData || listLoading">
           <div class="loading">
             <n-skeleton text round :repeat="10" height="20px" />
           </div>
         </template>
         <template v-else>
-          <div class="lists" :id="hotType + 'Lists'">
-            <div class="item" v-for="(item, index) in hotListData.data.slice(0, 15)" :key="item">
-              <n-text class="num" :class="index === 0
-                ? 'one'
-                : index === 1
-                  ? 'two'
-                  : index === 2
+          <div class="lists" :id="hotData.name + 'Lists'">
+            <div
+              class="item"
+              v-for="(item, index) in hotListData.data.slice(0, 15)"
+              :key="item"
+            >
+              <n-text
+                class="num"
+                :class="
+                  index === 0
+                    ? 'one'
+                    : index === 1
+                    ? 'two'
+                    : index === 2
                     ? 'three'
                     : null
-                " :depth="2">{{ index + 1 }}</n-text>
-              <n-text class="text" @click.stop="jumpLink(item)">
+                "
+                :depth="2"
+                >{{ index + 1 }}</n-text
+              >
+              <n-text
+                :style="{ fontSize: store.listFontSize + 'px' }"
+                class="text"
+                @click.stop="jumpLink(item)"
+              >
                 {{ item.title }}
               </n-text>
             </div>
@@ -64,11 +74,7 @@
     </n-scrollbar>
     <template #footer>
       <Transition name="fade" mode="out-in">
-        <template v-if="errorFlag">
-          <div class="loading">
-          </div>
-        </template>
-        <template v-else-if="!hotListData">
+        <template v-if="!hotListData">
           <div class="loading">
             <n-skeleton text round />
           </div>
@@ -82,7 +88,13 @@
             <n-space class="controls">
               <n-popover v-if="hotListData.data.length > 15">
                 <template #trigger>
-                  <n-button size="tiny" secondary strong round @click.stop="toList">
+                  <n-button
+                    size="tiny"
+                    secondary
+                    strong
+                    round
+                    @click.stop="toList"
+                  >
                     <template #icon>
                       <n-icon :component="More" />
                     </template>
@@ -92,7 +104,13 @@
               </n-popover>
               <n-popover>
                 <template #trigger>
-                  <n-button size="tiny" secondary strong round @click.stop="getNewData">
+                  <n-button
+                    size="tiny"
+                    secondary
+                    strong
+                    round
+                    @click.stop="getNewData"
+                  >
                     <template #icon>
                       <n-icon :component="Refresh" />
                     </template>
@@ -118,10 +136,10 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 const store = mainStore();
 const props = defineProps({
-  // 热榜类别
-  hotType: {
-    type: String,
-    default: null,
+  // 热榜数据
+  hotData: {
+    type: Object,
+    default: {},
   },
 });
 
@@ -129,48 +147,38 @@ const props = defineProps({
 const updateTime = ref(null);
 
 // 刷新按钮数据
-const lastClickTime = ref(localStorage.getItem(`${props.hotType}Btn`) || 0);
+const lastClickTime = ref(
+  localStorage.getItem(`${props.hotData.name}Btn`) || 0
+);
 
 // 热榜数据
 const hotListData = ref(null);
 const scrollbarRef = ref(null);
 const listLoading = ref(false);
-
-const errorFlag = ref(false);
+const loadingError = ref(false);
 
 // 获取热榜数据
-const getHotListsData = (type, isNew = false) => {
-  // hotListData.value = null;
-  getHotLists(type, isNew)
-    .then((res) => {
-      console.log(res);
-      if (res.code === 200) {
-        listLoading.value = false;
-        hotListData.value = res;
-        // 滚动至顶部
-        if (scrollbarRef.value) {
-          scrollbarRef.value.scrollTo({ position: "top", behavior: "smooth" });
-        }
-      } else {
-        $message.error(res.title + res.message);
+const getHotListsData = async (type, isNew = false) => {
+  try {
+    // hotListData.value = null;
+    loadingError.value = false;
+    const result = await getHotLists(type, isNew);
+    // console.log(result);
+    if (result.code === 200) {
+      listLoading.value = false;
+      hotListData.value = result;
+      // 滚动至顶部
+      if (scrollbarRef.value) {
+        scrollbarRef.value.scrollTo({ position: "top", behavior: "smooth" });
       }
-    })
-    .catch((error) => {
-
-      errorFlag.value = true;
-
-      // switch (error?.response.status) {
-      //   case 403:
-      //     router.push("/403");
-      //     break;
-      //   case 500:
-      //     router.push("/500");
-      //     break;
-      //   default:
-      //     router.push("/500");
-      //     break;
-      // }
-    });
+    } else {
+      loadingError.value = true;
+      $message.error(result.title + result.message);
+    }
+  } catch (error) {
+    loadingError.value = true;
+    $message.error("热榜加载失败，请重试");
+  }
 };
 
 // 获取最新数据
@@ -179,10 +187,10 @@ const getNewData = () => {
   if (now - lastClickTime.value > 60000) {
     // 点击事件
     listLoading.value = true;
-    getHotListsData(props.hotType, true);
+    getHotListsData(props.hotData.name, true);
     // 更新最后一次点击时间
     lastClickTime.value = now;
-    localStorage.setItem(`${props.hotType}Btn`, now);
+    localStorage.setItem(`${props.hotData.name}Btn`, now);
   } else {
     // 不执行点击事件
     $message.info("请稍后再刷新");
@@ -202,11 +210,11 @@ const jumpLink = (data) => {
 
 // 前往全部列表
 const toList = () => {
-  if (props.hotType) {
+  if (props.hotData.name) {
     router.push({
       path: "/list",
       query: {
-        type: props.hotType,
+        type: props.hotData.name,
       },
     });
   } else {
@@ -225,7 +233,7 @@ watch(
 );
 
 onMounted(() => {
-  if (props.hotType) getHotListsData(props.hotType);
+  if (props.hotData.name) getHotListsData(props.hotData.name);
 });
 </script>
 
@@ -250,12 +258,15 @@ onMounted(() => {
     align-items: center;
     font-size: 16px;
     height: 26px;
-
-    .n-avatar {
-      background-color: transparent;
-      width: 20px;
-      height: 20px;
-      margin-right: 8px;
+    .name {
+      display: flex;
+      align-items: center;
+      .n-avatar {
+        background-color: transparent;
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+      }
     }
 
     .subtitle {
